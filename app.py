@@ -623,7 +623,7 @@ else:
     </div>
     """, unsafe_allow_html=True)
     
-    st.image("generated_images/generated_image_665d699d-6249-4178-b83f-9a93dce89dca_0.png", width=180)
+    st.image("mascot.png", width=180)
     
     st.warning("⚠️ Dataset not found! Please ensure 'black_friday_sales.csv' is in the same directory.")
     
