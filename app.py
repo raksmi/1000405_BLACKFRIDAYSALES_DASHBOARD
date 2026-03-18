@@ -3,527 +3,642 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.ensemble import IsolationForest
 from scipy import stats
-
 from mlxtend.frequent_patterns import apriori, association_rules
 
-# Page configuration
-st.set_page_config(page_title="Black Friday Sales Data Mining Dashboard", page_icon="🛍", layout="wide")
+# ═══════════════════════════════════════════════════════════════════
+# PAGE CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════
+st.set_page_config(
+    page_title="Black Friday Sales Analytics",
+    page_icon="🛍️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.title("🛍 Black Friday Sales Data Mining Dashboard")
-st.markdown("---")
+# Custom CSS for stunning visuals
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+    
+    * {
+        font-family: 'Poppins', sans-serif;
+    }
+    
+    .main-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 20px;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+    }
+    
+    .main-header h1 {
+        color: white;
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .main-header p {
+        color: rgba(255,255,255,0.9);
+        font-size: 1.2rem;
+    }
+    
+    .metric-card {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: transform 0.3s ease;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .insight-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        margin: 1rem 0;
+    }
+    
+    .warning-box {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        margin: 1rem 0;
+    }
+    
+    .success-box {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        margin: 1rem 0;
+    }
+    
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
+        border-radius: 15px;
+        color: white;
+    }
+    
+    div[data-testid="stMetric"] label {
+        color: rgba(255,255,255,0.8) !important;
+    }
+    
+    div[data-testid="stMetric"] > div > div {
+        color: white !important;
+        font-size: 2rem !important;
+        font-weight: 700 !important;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        padding-left: 20px;
+        padding-right: 20px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border-radius: 10px 10px 0 0;
+        font-weight: 600;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white !important;
+    }
+    
+    .sidebar .sidebar-content {
+        background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    h2 {
+        color: #667eea;
+        font-weight: 700 !important;
+    }
+    
+    h3 {
+        color: #764ba2;
+        font-weight: 600 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# =============================================
-# STAGE 1: PROJECT SCOPE DEFINITION
-# =============================================
-st.sidebar.header("📋 Project Overview")
-st.sidebar.info("""
-**Objectives:**
-- Identify shopping behaviors
-- Group customers into clusters
-- Find product combinations bought together
-- Detect unusual big spenders
-""")
-
-# Upload dataset
-uploaded_file = st.file_uploader("Upload Black Friday Dataset (CSV)", type=["csv"])
-
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+# ═══════════════════════════════════════════════════════════════════
+# LOAD DATA
+# ═══════════════════════════════════════════════════════════════════
+@st.cache_data
+def load_data():
+    df = pd.read_csv("Blackfriday.csv")
     
-    # Store original data for comparison
-    df_original = df.copy()
-
-    # =============================================
-    # STAGE 1: PROJECT SCOPE (Display)
-    # =============================================
-    st.header("Stage 1: Project Scope Definition")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Records", f"{len(df):,}")
-    with col2:
-        st.metric("Unique Users", f"{df['User_ID'].nunique():,}")
-    with col3:
-        st.metric("Unique Products", f"{df['Product_ID'].nunique():,}")
-    
-    st.subheader("Dataset Columns")
-    st.write("**Available columns:** " + ", ".join(df.columns.tolist()))
-    
-    st.subheader("Dataset Preview")
-    st.dataframe(df.head(10))
-
-    # =============================================
-    # STAGE 2: DATA CLEANING & PREPROCESSING
-    # =============================================
-    st.header("Stage 2: Data Cleaning & Preprocessing")
-    
-    # Missing values analysis
-    st.subheader("Missing Values Analysis")
-    missing_before = df.isnull().sum()
-    missing_df = pd.DataFrame({
-        'Column': missing_before.index,
-        'Missing Values': missing_before.values,
-        'Percentage': (missing_before.values / len(df) * 100).round(2)
-    })
-    st.dataframe(missing_df[missing_df['Missing Values'] > 0])
-    
-    # Handle missing values
+    # Data cleaning
     df['Product_Category_2'].fillna(0, inplace=True)
     df['Product_Category_3'].fillna(0, inplace=True)
     
-    st.success("✅ Missing values in Product_Category_2 and Product_Category_3 filled with 0")
-    
-    # Check for duplicates
-    duplicates = df.duplicated().sum()
-    st.subheader("Duplicate Check")
-    st.write(f"Duplicate rows found: **{duplicates}**")
-    if duplicates > 0:
-        df.drop_duplicates(inplace=True)
-        st.success(f"✅ Removed {duplicates} duplicate rows")
-    
-    # Encode categorical data
-    st.subheader("Categorical Encoding")
-    
-    # Gender encoding (Male = 0, Female = 1)
+    # Encode categorical variables
     df['Gender_Encoded'] = df['Gender'].map({'M': 0, 'F': 1})
-    st.write("• Gender encoded: M → 0, F → 1")
     
-    # Age encoding with ordered mapping
-    age_mapping = {
-        '0-17': 1,
-        '18-25': 2,
-        '26-35': 3,
-        '36-45': 4,
-        '46-50': 5,
-        '51-55': 6,
-        '55+': 7
-    }
+    age_mapping = {'0-17': 1, '18-25': 2, '26-35': 3, '36-45': 4, 
+                   '46-50': 5, '51-55': 6, '55+': 7}
     df['Age_Encoded'] = df['Age'].map(age_mapping)
-    st.write("• Age groups encoded with ordered mapping (0-17 → 1, 18-25 → 2, etc.)")
     
-    # City Category encoding
-    le = LabelEncoder()
-    df['City_Category_Encoded'] = le.fit_transform(df['City_Category'])
-    st.write("• City Category encoded using LabelEncoder")
+    df['City_Encoded'] = df['City_Category'].astype('category').cat.codes
     
-    # Stay in current city encoding
     stay_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, '4+': 4}
     df['Stay_Encoded'] = df['Stay_In_Current_City_Years'].map(stay_mapping)
-    st.write("• Stay in Current City Years encoded (0-4)")
     
-    # Normalize Purchase amounts
-    st.subheader("Purchase Normalization")
-    scaler_norm = MinMaxScaler()
-    df['Purchase_Normalized'] = scaler_norm.fit_transform(df[['Purchase']])
-    st.write("• Purchase amounts normalized using MinMaxScaler")
-    
-    # Show cleaned data
-    st.subheader("Cleaned Dataset Preview")
-    st.dataframe(df.head())
+    return df
 
-    # =============================================
-    # STAGE 3: EXPLORATORY DATA ANALYSIS (EDA)
-    # =============================================
-    st.header("Stage 3: Exploratory Data Analysis (EDA)")
-    
-    # Purchase Distribution
-    st.subheader("Purchase Distribution")
-    col1, col2 = st.columns(2)
-    with col1:
-        fig1, ax1 = plt.subplots()
-        sns.histplot(df['Purchase'], bins=30, kde=True, ax=ax1, color='steelblue')
-        ax1.set_title('Purchase Amount Distribution')
-        ax1.set_xlabel('Purchase Amount')
-        st.pyplot(fig1)
-    with col2:
-        fig1b, ax1b = plt.subplots()
-        sns.boxplot(y=df['Purchase'], ax=ax1b, color='steelblue')
-        ax1b.set_title('Purchase Amount Box Plot')
-        st.pyplot(fig1b)
-    
-    # Purchase by Gender
-    st.subheader("Purchase Analysis by Gender")
-    col1, col2 = st.columns(2)
-    with col1:
-        fig2, ax2 = plt.subplots()
-        gender_labels = {0: 'Male', 1: 'Female'}
-        sns.barplot(x='Gender_Encoded', y='Purchase', data=df, ax=ax2, palette='Set2')
-        ax2.set_xticklabels(['Male', 'Female'])
-        ax2.set_title('Average Purchase by Gender')
-        ax2.set_xlabel('Gender')
-        st.pyplot(fig2)
-    with col2:
-        fig2b, ax2b = plt.subplots()
-        sns.boxplot(x='Gender_Encoded', y='Purchase', data=df, ax=ax2b, palette='Set2')
-        ax2b.set_xticklabels(['Male', 'Female'])
-        ax2b.set_title('Purchase Distribution by Gender')
-        ax2b.set_xlabel('Gender')
-        st.pyplot(fig2b)
-    
-    # Purchase by Age Group
-    st.subheader("Purchase Analysis by Age Group")
-    col1, col2 = st.columns(2)
-    with col1:
-        fig3, ax3 = plt.subplots(figsize=(10, 5))
-        sns.boxplot(x='Age', y='Purchase', data=df, ax=ax3, palette='viridis')
-        ax3.set_title('Purchase Distribution by Age Group')
-        ax3.set_xlabel('Age Group')
-        ax3.tick_params(axis='x', rotation=45)
-        st.pyplot(fig3)
-    with col2:
-        fig3b, ax3b = plt.subplots(figsize=(10, 5))
-        age_purchase = df.groupby('Age')['Purchase'].mean().sort_values(ascending=False)
-        sns.barplot(x=age_purchase.index, y=age_purchase.values, ax=ax3b, palette='viridis')
-        ax3b.set_title('Average Purchase by Age Group')
-        ax3b.set_xlabel('Age Group')
-        ax3b.set_ylabel('Average Purchase')
-        ax3b.tick_params(axis='x', rotation=45)
-        st.pyplot(fig3b)
-    
-    # Most Popular Product Categories
-    st.subheader("Product Category Popularity")
-    col1, col2 = st.columns(2)
-    with col1:
-        fig_cat, ax_cat = plt.subplots(figsize=(10, 5))
-        cat_counts = df['Product_Category_1'].value_counts().head(10)
-        sns.barplot(x=cat_counts.index, y=cat_counts.values, ax=ax_cat, palette='coolwarm')
-        ax_cat.set_title('Top 10 Product Categories (Category 1)')
-        ax_cat.set_xlabel('Product Category')
-        ax_cat.set_ylabel('Number of Purchases')
-        st.pyplot(fig_cat)
-    with col2:
-        fig_cat2, ax_cat2 = plt.subplots(figsize=(10, 5))
-        cat_avg = df.groupby('Product_Category_1')['Purchase'].mean().sort_values(ascending=False).head(10)
-        sns.barplot(x=cat_avg.index, y=cat_avg.values, ax=ax_cat2, palette='coolwarm')
-        ax_cat2.set_title('Top 10 Categories by Avg Purchase Amount')
-        ax_cat2.set_xlabel('Product Category')
-        ax_cat2.set_ylabel('Average Purchase Amount')
-        st.pyplot(fig_cat2)
-    
-    # Scatter plots for Purchase vs. Occupation and Stay
-    st.subheader("Purchase vs. Occupation & Stay Duration")
-    col1, col2 = st.columns(2)
-    with col1:
-        fig_scat1, ax_scat1 = plt.subplots(figsize=(10, 5))
-        sns.scatterplot(x='Occupation', y='Purchase', data=df.sample(min(1000, len(df))), 
-                        alpha=0.5, ax=ax_scat1, hue='Gender', palette='Set1')
-        ax_scat1.set_title('Purchase vs. Occupation (Sample)')
-        st.pyplot(fig_scat1)
-    with col2:
-        fig_scat2, ax_scat2 = plt.subplots(figsize=(10, 5))
-        sns.boxplot(x='Stay_In_Current_City_Years', y='Purchase', data=df, ax=ax_scat2, palette='Set3')
-        ax_scat2.set_title('Purchase by Stay Duration in City')
-        st.pyplot(fig_scat2)
-    
-    # Correlation Heatmap
-    st.subheader("Correlation Heatmap")
-    numeric_cols = ['Gender_Encoded', 'Age_Encoded', 'Occupation', 'City_Category_Encoded', 
-                    'Stay_Encoded', 'Marital_Status', 'Product_Category_1', 
-                    'Product_Category_2', 'Product_Category_3', 'Purchase']
-    fig4, ax4 = plt.subplots(figsize=(12, 8))
-    sns.heatmap(df[numeric_cols].corr(), annot=True, cmap="coolwarm", ax=ax4, fmt='.2f')
-    ax4.set_title('Feature Correlation Heatmap')
-    st.pyplot(fig4)
-    
-    # City Category Analysis
-    st.subheader("City Category Analysis")
-    fig_city, ax_city = plt.subplots(figsize=(10, 5))
-    city_stats = df.groupby('City_Category').agg({
-        'Purchase': ['mean', 'count', 'sum']
-    }).round(2)
-    city_stats.columns = ['Avg Purchase', 'Total Transactions', 'Total Revenue']
-    st.dataframe(city_stats)
-    
-    fig_city_bar, ax_city_bar = plt.subplots()
-    sns.barplot(x=city_stats.index, y='Avg Purchase', data=city_stats, ax=ax_city_bar, palette='Set2')
-    ax_city_bar.set_title('Average Purchase by City Category')
-    st.pyplot(fig_city_bar)
+# Try to load data
+try:
+    df = load_data()
+    data_loaded = True
+except:
+    data_loaded = False
 
-    # =============================================
-    # STAGE 4: CLUSTERING ANALYSIS
-    # =============================================
-    st.header("Stage 4: Clustering Analysis")
+# ═══════════════════════════════════════════════════════════════════
+# SIDEBAR
+# ═══════════════════════════════════════════════════════════════════
+with st.sidebar:
+    # Mascot image
+    st.image("generated_images/generated_image_665d699d-6249-4178-b83f-9a93dce89dca_0.png", 
+             width=180, caption="Your Data Ninja! 🥷")
     
-    st.subheader("Feature Selection for Clustering")
-    cluster_features = st.multiselect(
-        "Select features for clustering:",
-        ['Age_Encoded', 'Occupation', 'Marital_Status', 'Purchase', 'Gender_Encoded', 
-         'City_Category_Encoded', 'Stay_Encoded'],
-        default=['Age_Encoded', 'Occupation', 'Marital_Status', 'Purchase']
-    )
+    st.markdown("---")
+    st.markdown("### 🎛️ Control Panel")
     
-    if len(cluster_features) >= 2:
-        features = df[cluster_features].dropna()
+    if data_loaded:
+        st.markdown(f"""
+        **Dataset Stats:**
+        - 📊 {len(df):,} transactions
+        - 👥 {df['User_ID'].nunique():,} unique users
+        - 🛒 {df['Product_ID'].nunique():,} products
+        """)
+    
+    st.markdown("---")
+    st.markdown("### ⚙️ Analysis Settings")
+    
+    n_clusters = st.slider("Number of Clusters", 2, 8, 4)
+    anomaly_rate = st.slider("Anomaly Sensitivity", 0.01, 0.10, 0.02)
+    
+    st.markdown("---")
+    st.markdown("""
+    ### 📌 Quick Tips
+    - Use tabs to navigate
+    - Hover over charts for details
+    - Adjust sliders in sidebar
+    """)
+
+# ═══════════════════════════════════════════════════════════════════
+# MAIN CONTENT
+# ═══════════════════════════════════════════════════════════════════
+if data_loaded:
+    # Header with mascot
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("""
+        <div class="main-header">
+            <h1>🛍️ Black Friday Sales Analytics</h1>
+            <p>Uncover hidden patterns in retail data with AI-powered insights</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.image("generated_images/generated_image_665d699d-6249-4178-b83f-9a93dce89dca_0.png", 
+                 width=180)
+    
+    # Key Metrics Row
+    st.markdown("### 📈 Key Metrics at a Glance")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("💰 Total Revenue", f"${df['Purchase'].sum():,.0f}")
+    with col2:
+        st.metric("🛒 Avg Purchase", f"${df['Purchase'].mean():,.2f}")
+    with col3:
+        st.metric("👥 Total Customers", f"{df['User_ID'].nunique():,}")
+    with col4:
+        st.metric("📦 Transactions", f"{len(df):,}")
+    
+    st.markdown("---")
+    
+    # Main Tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 Overview", "🎯 Customer Segments", "🔗 Product Insights", 
+        "🚨 Anomaly Detection", "💡 Recommendations"
+    ])
+    
+    # ═════════════════════════════════════════════════════════════
+    # TAB 1: OVERVIEW
+    # ═════════════════════════════════════════════════════════════
+    with tab1:
+        col1, col2 = st.columns(2)
         
-        # Standardize features
+        with col1:
+            st.markdown("#### 💵 Purchase Distribution")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.histplot(df['Purchase'], bins=40, kde=True, color='#667eea', ax=ax)
+            ax.axvline(df['Purchase'].mean(), color='#f5576c', linestyle='--', linewidth=2, label=f'Mean: ${df["Purchase"].mean():.0f}')
+            ax.legend()
+            ax.set_xlabel('Purchase Amount ($)')
+            plt.tight_layout()
+            st.pyplot(fig)
+            
+            st.markdown("#### 🎂 Purchase by Age Group")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            age_order = ['0-17', '18-25', '26-35', '36-45', '46-50', '51-55', '55+']
+            sns.boxplot(x='Age', y='Purchase', data=df, order=age_order, palette='viridis', ax=ax)
+            ax.set_xlabel('Age Group')
+            ax.set_ylabel('Purchase ($)')
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            st.pyplot(fig)
+        
+        with col2:
+            st.markdown("#### 👫 Gender Analysis")
+            fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+            
+            # Pie chart
+            gender_counts = df['Gender'].value_counts()
+            colors = ['#667eea', '#f5576c']
+            axes[0].pie(gender_counts, labels=['Male', 'Female'], autopct='%1.1f%%', 
+                       colors=colors, explode=(0.05, 0.05), shadow=True)
+            axes[0].set_title('Gender Distribution')
+            
+            # Bar chart
+            gender_purchase = df.groupby('Gender')['Purchase'].mean()
+            sns.barplot(x=['Male', 'Female'], y=gender_purchase.values, palette='viridis', ax=axes[1])
+            axes[1].set_title('Avg Purchase by Gender')
+            axes[1].set_ylabel('Avg Purchase ($)')
+            plt.tight_layout()
+            st.pyplot(fig)
+            
+            st.markdown("#### 🏙️ City Category Performance")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            city_stats = df.groupby('City_Category')['Purchase'].agg(['mean', 'count'])
+            city_stats.columns = ['Avg Purchase', 'Transactions']
+            city_stats = city_stats.reset_index()
+            
+            x = np.arange(len(city_stats))
+            width = 0.35
+            bars1 = ax.bar(x - width/2, city_stats['Avg Purchase'], width, label='Avg Purchase', color='#667eea')
+            ax2 = ax.twinx()
+            bars2 = ax2.bar(x + width/2, city_stats['Transactions']/100, width, label='Transactions (100s)', color='#f5576c')
+            
+            ax.set_xlabel('City Category')
+            ax.set_ylabel('Avg Purchase ($)', color='#667eea')
+            ax2.set_ylabel('Transactions (100s)', color='#f5576c')
+            ax.set_xticks(x)
+            ax.set_xticklabels(city_stats['City_Category'])
+            ax.legend(loc='upper left')
+            ax2.legend(loc='upper right')
+            plt.tight_layout()
+            st.pyplot(fig)
+        
+        # Correlation Heatmap
+        st.markdown("#### 🔥 Feature Correlation Heatmap")
+        numeric_cols = ['Gender_Encoded', 'Age_Encoded', 'Occupation', 'City_Encoded', 
+                        'Stay_Encoded', 'Marital_Status', 'Purchase']
+        fig, ax = plt.subplots(figsize=(12, 8))
+        sns.heatmap(df[numeric_cols].corr(), annot=True, cmap='coolwarm', center=0, 
+                    fmt='.2f', linewidths=0.5, ax=ax)
+        plt.tight_layout()
+        st.pyplot(fig)
+    
+    # ═════════════════════════════════════════════════════════════
+    # TAB 2: CUSTOMER SEGMENTS
+    # ═════════════════════════════════════════════════════════════
+    with tab2:
+        st.markdown("#### 🎯 Customer Segmentation with K-Means Clustering")
+        
+        # Prepare features
+        features = df[['Age_Encoded', 'Occupation', 'Marital_Status', 'Purchase']].dropna()
         scaler = StandardScaler()
         scaled_features = scaler.fit_transform(features)
         
         # Elbow Method
-        st.subheader("Elbow Method for Optimal K")
-        inertias = []
-        K_range = range(1, 11)
-        for k in K_range:
-            kmeans_temp = KMeans(n_clusters=k, random_state=42, n_init=10)
-            kmeans_temp.fit(scaled_features)
-            inertias.append(kmeans_temp.inertia_)
-        
-        fig_elbow, ax_elbow = plt.subplots()
-        ax_elbow.plot(K_range, inertias, 'bx-')
-        ax_elbow.set_xlabel('Number of Clusters (K)')
-        ax_elbow.set_ylabel('Inertia')
-        ax_elbow.set_title('Elbow Method for Optimal K')
-        st.pyplot(fig_elbow)
-        
-        # Select number of clusters
-        n_clusters = st.slider("Select Number of Clusters:", min_value=2, max_value=10, value=4)
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("##### 📐 Elbow Method Analysis")
+            inertias = []
+            K_range = range(1, 11)
+            for k in K_range:
+                kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+                kmeans.fit(scaled_features)
+                inertias.append(kmeans.inertia_)
+            
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(K_range, inertias, 'bo-', linewidth=2, markersize=10)
+            ax.axvline(n_clusters, color='#f5576c', linestyle='--', linewidth=2, label=f'Selected K={n_clusters}')
+            ax.set_xlabel('Number of Clusters (K)')
+            ax.set_ylabel('Inertia')
+            ax.set_title('Elbow Method for Optimal K')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            st.pyplot(fig)
         
         # Apply K-Means
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
         df['Cluster'] = kmeans.fit_predict(scaled_features)
         
-        # Cluster visualization
-        st.subheader("Cluster Visualization")
-        
-        # 2D Scatter plot
-        col1, col2 = st.columns(2)
-        with col1:
-            fig5, ax5 = plt.subplots(figsize=(10, 6))
-            scatter = sns.scatterplot(x=features.iloc[:, 0], y=features.iloc[:, 3], 
-                                      hue=df['Cluster'], palette="Set2", ax=ax5, s=50, alpha=0.7)
-            ax5.set_title(f'Customer Clusters (K={n_clusters})')
-            ax5.set_xlabel(cluster_features[0])
-            ax5.set_ylabel(cluster_features[3] if len(cluster_features) > 3 else cluster_features[1])
-            st.pyplot(fig5)
-        
         with col2:
-            # Pair plot for clusters
-            fig_pair, ax_pair = plt.subplots(figsize=(10, 6))
-            sns.scatterplot(x=features.iloc[:, 0], y=features.iloc[:, 1], 
-                           hue=df['Cluster'], palette="Set2", ax=ax_pair, s=50, alpha=0.7)
-            ax_pair.set_title(f'Customer Clusters - Alternative View')
-            st.pyplot(fig_pair)
+            st.markdown("##### 🎨 Cluster Visualization")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            scatter = sns.scatterplot(x=features.iloc[:, 0], y=features.iloc[:, 3], 
+                                       hue=df['Cluster'], palette='Set2', s=60, alpha=0.7, ax=ax)
+            ax.set_xlabel('Age (Encoded)')
+            ax.set_ylabel('Purchase Amount ($)')
+            ax.set_title(f'Customer Clusters (K={n_clusters})')
+            plt.tight_layout()
+            st.pyplot(fig)
         
         # Cluster Summary
-        st.subheader("Cluster Summary Statistics")
+        st.markdown("##### 📊 Cluster Summary Statistics")
         cluster_summary = df.groupby('Cluster').agg({
-            'Purchase': ['mean', 'median', 'std', 'count'],
-            'Age_Encoded': 'mean',
-            'Occupation': lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else 'N/A',
-            'Marital_Status': 'mean'
+            'Purchase': ['mean', 'count'],
+            'Age': lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else 'N/A',
+            'Gender': lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else 'N/A'
         }).round(2)
-        cluster_summary.columns = ['Avg Purchase', 'Median Purchase', 'Std Purchase', 
-                                   'Count', 'Avg Age Group', 'Mode Occupation', 'Marital Rate']
-        st.dataframe(cluster_summary)
+        cluster_summary.columns = ['Avg Purchase ($)', 'Customers', 'Top Age Group', 'Top Gender']
+        cluster_summary['% of Total'] = (cluster_summary['Customers'] / len(df) * 100).round(1)
         
-        # Label clusters interactively
-        st.subheader("Cluster Labels")
-        st.write("Based on the cluster characteristics, you can assign meaningful labels:")
-        cluster_labels = {}
+        # Style the dataframe
+        st.dataframe(cluster_summary.style.background_gradient(cmap='viridis'), use_container_width=True)
+        
+        # Cluster interpretation
+        st.markdown("##### 💡 Cluster Interpretation")
+        interpretations = []
         for i in range(n_clusters):
-            label = st.text_input(f"Label for Cluster {i}:", 
-                                  value=f"Cluster {i}", key=f"cluster_{i}")
-            cluster_labels[i] = label
+            avg_purch = df[df['Cluster'] == i]['Purchase'].mean()
+            if avg_purch > df['Purchase'].quantile(0.75):
+                label = "🤑 **Premium Spenders**"
+            elif avg_purch > df['Purchase'].quantile(0.5):
+                label = "🛍️ **Regular Shoppers**"
+            else:
+                label = "💰 **Budget Conscious**"
+            interpretations.append(f"**Cluster {i}:** {label} - Avg: ${avg_purch:,.0f}")
         
-        # Display labeled clusters
-        df['Cluster_Label'] = df['Cluster'].map(cluster_labels)
-        st.write(df.groupby('Cluster_Label')['Purchase'].describe().round(2))
+        for interp in interpretations:
+            st.markdown(f"- {interp}")
+    
+    # ═════════════════════════════════════════════════════════════
+    # TAB 3: PRODUCT INSIGHTS
+    # ═════════════════════════════════════════════════════════════
+    with tab3:
+        col1, col2 = st.columns(2)
         
-    else:
-        st.warning("Please select at least 2 features for clustering.")
-
-    # =============================================
-    # STAGE 5: ASSOCIATION RULE MINING
-    # =============================================
-    st.header("Stage 5: Association Rule Mining")
-    
-    st.write("Discovering product combinations frequently bought together")
-    
-    # Prepare data for association rules
-    basket = df[['Product_Category_1', 'Product_Category_2', 'Product_Category_3']].copy()
-    basket = basket.astype(str)
-    
-    # Create one-hot encoded basket
-    basket_encoded = pd.get_dummies(basket)
-    
-    # Parameters
-    min_support = st.slider("Minimum Support:", min_value=0.01, max_value=0.1, value=0.02, step=0.01)
-    min_confidence = st.slider("Minimum Confidence:", min_value=0.1, max_value=0.9, value=0.3, step=0.1)
-    
-    # Generate frequent itemsets
-    frequent_items = apriori(basket_encoded, min_support=min_support, use_colnames=True)
-    
-    if len(frequent_items) > 0:
-        st.subheader("Frequent Itemsets")
-        st.write(f"Found {len(frequent_items)} frequent itemsets")
-        st.dataframe(frequent_items.sort_values('support', ascending=False).head(20))
-        
-        # Generate association rules
-        rules = association_rules(frequent_items, metric="confidence", 
-                                  min_threshold=min_confidence, num_itemsets=len(frequent_items))
-        
-        if len(rules) > 0:
-            st.subheader("Association Rules")
-            
-            # Filter by lift
-            rules = rules[rules['lift'] >= 1.0]
-            rules_display = rules[['antecedents', 'consequents', 'support', 'confidence', 'lift']].copy()
-            rules_display['antecedents'] = rules_display['antecedents'].apply(lambda x: ', '.join(list(x)))
-            rules_display['consequents'] = rules_display['consequents'].apply(lambda x: ', '.join(list(x)))
-            rules_display = rules_display.sort_values('lift', ascending=False)
-            
-            st.write(f"Found {len(rules_display)} association rules")
-            st.dataframe(rules_display.head(20))
-            
-            # Visualize top rules
-            st.subheader("Top 10 Rules by Lift")
-            fig_rules, ax_rules = plt.subplots(figsize=(12, 6))
-            top_rules = rules_display.head(10)
-            bars = ax_rules.barh(range(len(top_rules)), top_rules['lift'].values, color='steelblue')
-            ax_rules.set_yticks(range(len(top_rules)))
-            ax_rules.set_yticklabels([f"{a} → {c}" for a, c in zip(top_rules['antecedents'], top_rules['consequents'])])
-            ax_rules.set_xlabel('Lift')
-            ax_rules.set_title('Top 10 Association Rules by Lift')
+        with col1:
+            st.markdown("#### 📦 Product Category Popularity")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            cat_counts = df['Product_Category_1'].value_counts().head(10)
+            colors = plt.cm.viridis(np.linspace(0, 1, len(cat_counts)))
+            bars = ax.barh(range(len(cat_counts)), cat_counts.values, color=colors)
+            ax.set_yticks(range(len(cat_counts)))
+            ax.set_yticklabels([f'Cat {c}' for c in cat_counts.index])
+            ax.set_xlabel('Number of Purchases')
+            ax.set_title('Top 10 Product Categories')
+            for i, v in enumerate(cat_counts.values):
+                ax.text(v + 1000, i, f'{v:,}', va='center', fontsize=9)
             plt.tight_layout()
-            st.pyplot(fig_rules)
-        else:
-            st.warning("No association rules found with the current parameters. Try lowering the minimum confidence.")
-    else:
-        st.warning("No frequent itemsets found. Try lowering the minimum support.")
-
-    # =============================================
-    # STAGE 6: ANOMALY DETECTION
-    # =============================================
-    st.header("Stage 6: Anomaly Detection (Unusual Spenders)")
+            st.pyplot(fig)
+            
+            st.markdown("#### 💵 Revenue by Category")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            cat_revenue = df.groupby('Product_Category_1')['Purchase'].sum().sort_values(ascending=False).head(10)
+            colors = plt.cm.plasma(np.linspace(0, 1, len(cat_revenue)))
+            ax.barh(range(len(cat_revenue)), cat_revenue.values, color=colors)
+            ax.set_yticks(range(len(cat_revenue)))
+            ax.set_yticklabels([f'Cat {c}' for c in cat_revenue.index])
+            ax.set_xlabel('Total Revenue ($)')
+            ax.set_title('Top 10 Categories by Revenue')
+            plt.tight_layout()
+            st.pyplot(fig)
+        
+        with col2:
+            st.markdown("#### 🔗 Product Association Rules")
+            
+            # Prepare basket
+            basket = df[['Product_Category_1', 'Product_Category_2', 'Product_Category_3']].copy()
+            basket = basket.astype(str)
+            basket_encoded = pd.get_dummies(basket)
+            
+            try:
+                frequent_items = apriori(basket_encoded, min_support=0.02, use_colnames=True)
+                if len(frequent_items) > 0:
+                    rules = association_rules(frequent_items, metric="lift", min_threshold=1.0, 
+                                             num_itemsets=len(frequent_items))
+                    rules = rules[rules['lift'] >= 1.2].sort_values('lift', ascending=False)
+                    
+                    if len(rules) > 0:
+                        st.markdown("##### 🎯 Top Product Associations")
+                        for idx, row in rules.head(5).iterrows():
+                            ant = ', '.join([x.split('_')[-1] for x in list(row['antecedents'])])
+                            con = ', '.join([x.split('_')[-1] for x in list(row['consequents'])])
+                            st.markdown(f"""
+                            <div class="insight-box">
+                                <b>📦 Categories {ant}</b> → <b>🛒 Categories {con}</b><br>
+                                <small>Lift: {row['lift']:.2f} | Confidence: {row['confidence']:.2%}</small>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    else:
+                        st.info("No strong association rules found. Try different parameters.")
+                else:
+                    st.info("No frequent itemsets found.")
+            except Exception as e:
+                st.warning(f"Association analysis requires more data diversity.")
+        
+        # Category performance by demographic
+        st.markdown("#### 👫 Category Preferences by Gender")
+        fig, ax = plt.subplots(figsize=(12, 6))
+        gender_cat = df.groupby(['Gender', 'Product_Category_1'])['Purchase'].mean().unstack().T
+        gender_cat = gender_cat.head(10)
+        x = np.arange(len(gender_cat))
+        width = 0.35
+        ax.bar(x - width/2, gender_cat['M'], width, label='Male', color='#667eea')
+        ax.bar(x + width/2, gender_cat['F'], width, label='Female', color='#f5576c')
+        ax.set_xlabel('Product Category')
+        ax.set_ylabel('Average Purchase ($)')
+        ax.set_title('Avg Purchase by Category & Gender')
+        ax.set_xticks(x)
+        ax.set_xticklabels(gender_cat.index)
+        ax.legend()
+        plt.tight_layout()
+        st.pyplot(fig)
     
-    # Method selection
-    anomaly_method = st.radio("Select Anomaly Detection Method:", 
-                              ["Isolation Forest", "Z-Score", "IQR Method"])
-    
-    if anomaly_method == "Isolation Forest":
-        contamination = st.slider("Contamination Rate:", min_value=0.01, max_value=0.1, value=0.02, step=0.01)
-        iso = IsolationForest(contamination=contamination, random_state=42)
+    # ═════════════════════════════════════════════════════════════
+    # TAB 4: ANOMALY DETECTION
+    # ═════════════════════════════════════════════════════════════
+    with tab4:
+        st.markdown("#### 🚨 Detecting Unusual Shopping Behavior")
+        
+        # Isolation Forest
+        iso = IsolationForest(contamination=anomaly_rate, random_state=42)
         df['Anomaly'] = iso.fit_predict(df[['Purchase']])
-        df['Anomaly'] = df['Anomaly'].map({1: 0, -1: 1})  # 1 = anomaly, 0 = normal
+        df['Anomaly'] = df['Anomaly'].map({1: 0, -1: 1})
         
-    elif anomaly_method == "Z-Score":
-        z_threshold = st.slider("Z-Score Threshold:", min_value=2.0, max_value=4.0, value=3.0, step=0.1)
-        df['Z_Score'] = np.abs(stats.zscore(df['Purchase']))
-        df['Anomaly'] = (df['Z_Score'] > z_threshold).astype(int)
+        anomalies = df[df['Anomaly'] == 1]
+        normal = df[df['Anomaly'] == 0]
         
-    else:  # IQR Method
-        Q1 = df['Purchase'].quantile(0.25)
-        Q3 = df['Purchase'].quantile(0.75)
-        IQR = Q3 - Q1
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-        df['Anomaly'] = ((df['Purchase'] < lower_bound) | (df['Purchase'] > upper_bound)).astype(int)
-        st.write(f"IQR Bounds: Lower = {lower_bound:.2f}, Upper = {upper_bound:.2f}")
+        # Metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("🚨 Anomalies Found", f"{len(anomalies):,}")
+        with col2:
+            st.metric("💰 Anomaly Avg Purchase", f"${anomalies['Purchase'].mean():,.0f}")
+        with col3:
+            st.metric("📊 Detection Rate", f"{len(anomalies)/len(df)*100:.2f}%")
+        
+        # Visualization
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("##### 🔍 Anomaly Detection Visualization")
+            fig, ax = plt.subplots(figsize=(12, 6))
+            ax.scatter(normal.index[:5000], normal['Purchase'].iloc[:5000], 
+                      c='#667eea', alpha=0.3, s=10, label='Normal')
+            ax.scatter(anomalies.index, anomalies['Purchase'], 
+                      c='#f5576c', alpha=0.8, s=50, label='Anomaly', marker='X')
+            ax.axhline(df['Purchase'].mean() + 2*df['Purchase'].std(), 
+                      color='orange', linestyle='--', label='Threshold')
+            ax.set_xlabel('Transaction Index')
+            ax.set_ylabel('Purchase Amount ($)')
+            ax.set_title('Anomaly Detection Results')
+            ax.legend()
+            plt.tight_layout()
+            st.pyplot(fig)
+        
+        with col2:
+            st.markdown("##### 📊 Anomaly Distribution")
+            fig, ax = plt.subplots(figsize=(12, 6))
+            sns.histplot(df['Purchase'], bins=50, color='#667eea', alpha=0.5, label='All', ax=ax)
+            sns.histplot(anomalies['Purchase'], bins=20, color='#f5576c', label='Anomalies', ax=ax)
+            ax.set_xlabel('Purchase Amount ($)')
+            ax.set_title('Purchase Distribution with Anomalies Highlighted')
+            ax.legend()
+            plt.tight_layout()
+            st.pyplot(fig)
+        
+        # Anomaly details
+        st.markdown("##### 📋 Top Unusual High Spenders")
+        st.dataframe(anomalies[['User_ID', 'Product_ID', 'Purchase', 'Age', 'Gender', 'Occupation']]
+                    .sort_values('Purchase', ascending=False).head(15)
+                    .style.background_gradient(cmap='Reds', subset=['Purchase']),
+                    use_container_width=True)
+        
+        # Anomaly demographics
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("##### 👫 Anomalies by Gender")
+            fig, ax = plt.subplots(figsize=(8, 6))
+            anom_gender = anomalies['Gender'].value_counts()
+            ax.pie(anom_gender, labels=['Male', 'Female'], autopct='%1.1f%%', 
+                  colors=['#667eea', '#f5576c'], explode=(0.05, 0.05))
+            ax.set_title('Anomaly Distribution by Gender')
+            st.pyplot(fig)
+        
+        with col2:
+            st.markdown("##### 🎂 Anomalies by Age")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.countplot(x='Age', data=anomalies, palette='viridis', 
+                         order=['0-17', '18-25', '26-35', '36-45', '46-50', '51-55', '55+'], ax=ax)
+            ax.set_title('Anomaly Distribution by Age Group')
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            st.pyplot(fig)
     
-    # Get anomalies
-    anomalies = df[df['Anomaly'] == 1]
-    normal = df[df['Anomaly'] == 0]
-    
-    st.subheader("Anomaly Detection Results")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Records", f"{len(df):,}")
-    with col2:
-        st.metric("Anomalies Detected", f"{len(anomalies):,}")
-    with col3:
-        st.metric("Anomaly Rate", f"{len(anomalies)/len(df)*100:.2f}%")
-    
-    # Visualize anomalies
-    st.subheader("Anomaly Visualization")
-    fig6, ax6 = plt.subplots(figsize=(12, 6))
-    ax6.scatter(normal.index, normal['Purchase'], c='blue', alpha=0.3, label='Normal', s=10)
-    ax6.scatter(anomalies.index, anomalies['Purchase'], c='red', alpha=0.7, label='Anomaly', s=30)
-    ax6.set_xlabel('Index')
-    ax6.set_ylabel('Purchase Amount')
-    ax6.set_title('Anomaly Detection Results')
-    ax6.legend()
-    st.pyplot(fig6)
-    
-    # Anomaly details
-    st.subheader("Unusual High Spenders Details")
-    st.dataframe(anomalies[['User_ID', 'Product_ID', 'Purchase', 'Age', 'Occupation', 'Gender']].head(20))
-    
-    # Anomaly demographics
-    st.subheader("Anomaly Demographics Analysis")
-    col1, col2 = st.columns(2)
-    with col1:
-        fig_anom_age, ax_anom_age = plt.subplots()
-        sns.countplot(x='Age', data=anomalies, ax=ax_anom_age, palette='Reds')
-        ax_anom_age.set_title('Anomalies by Age Group')
-        ax_anom_age.tick_params(axis='x', rotation=45)
-        st.pyplot(fig_anom_age)
-    with col2:
-        fig_anom_gender, ax_anom_gender = plt.subplots()
-        gender_anom = anomalies['Gender'].value_counts()
-        ax_anom_gender.pie(gender_anom.values, labels=gender_anom.index, autopct='%1.1f%%', colors=['lightblue', 'pink'])
-        ax_anom_gender.set_title('Anomalies by Gender')
-        st.pyplot(fig_anom_gender)
-
-    # =============================================
-    # STAGE 7: INSIGHTS & REPORTING
-    # =============================================
-    st.header("Stage 7: Key Insights & Recommendations")
-    
-    st.subheader("📊 Data-Driven Insights")
-    
-    # Calculate insights
-    top_age_group = df.groupby('Age')['Purchase'].mean().idxmax()
-    top_age_value = df.groupby('Age')['Purchase'].mean().max()
-    
-    gender_spending = df.groupby('Gender')['Purchase'].mean()
-    higher_spender_gender = gender_spending.idxmax()
-    
-    top_product_cat = df['Product_Category_1'].value_counts().index[0]
-    
-    insight_list = [
-        f"**Age Group Spending:** The **{top_age_group}** age group spends the most on average (${top_age_value:.2f}).",
-        f"**Gender Analysis:** **{higher_spender_gender}** customers tend to spend more on average.",
-        f"**Most Popular Category:** Product Category **{top_product_cat}** has the highest number of purchases.",
-        f"**Anomaly Detection:** {len(anomalies)} unusual high spenders were identified ({len(anomalies)/len(df)*100:.2f}% of transactions).",
-        f"**Customer Segments:** {n_clusters} distinct customer clusters were identified through K-Means clustering.",
-        f"**Association Rules:** Product combinations were discovered that can inform cross-selling strategies."
-    ]
-    
-    for insight in insight_list:
-        st.markdown(f"• {insight}")
-    
-    st.subheader("💡 Business Recommendations")
-    recommendations = [
-        "**Target Marketing:** Focus marketing efforts on the highest-spending age groups with personalized offers.",
-        "**Cross-Selling:** Use association rules to create bundle deals for frequently co-purchased products.",
-        "**Premium Customer Focus:** Develop loyalty programs for the anomaly-detected high-value customers.",
-        "**Category Optimization:** Stock more products from popular categories and consider expanding in those areas.",
-        "**Personalized Promotions:** Use cluster labels to tailor promotions for different customer segments."
-    ]
-    
-    for rec in recommendations:
-        st.markdown(f"• {rec}")
+    # ═════════════════════════════════════════════════════════════
+    # TAB 5: RECOMMENDATIONS
+    # ═════════════════════════════════════════════════════════════
+    with tab5:
+        st.markdown("#### 💡 AI-Powered Business Recommendations")
+        
+        # Calculate key insights
+        top_age = df.groupby('Age')['Purchase'].mean().idxmax()
+        top_age_val = df.groupby('Age')['Purchase'].mean().max()
+        top_gender = df.groupby('Gender')['Purchase'].mean().idxmax()
+        top_cat = df['Product_Category_1'].value_counts().index[0]
+        top_revenue_cat = df.groupby('Product_Category_1')['Purchase'].sum().idxmax()
+        
+        st.markdown(f"""
+        <div class="success-box">
+            <h3>🎯 Key Insights Discovered</h3>
+            <ul>
+                <li><b>Top Spending Age Group:</b> {top_age} years (Avg: ${top_age_val:,.0f})</li>
+                <li><b>Higher Spending Gender:</b> {top_gender}</li>
+                <li><b>Most Popular Category:</b> Category {top_cat}</li>
+                <li><b>Highest Revenue Category:</b> Category {top_revenue_cat}</li>
+                <li><b>High-Value Customers Detected:</b> {len(anomalies):,} anomaly transactions</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("#### 🚀 Strategic Recommendations")
+        
+        recs = [
+            ("🎯 Targeted Marketing", f"Focus campaigns on the **{top_age}** age group - they have the highest average spend of ${top_age_val:,.0f}"),
+            ("📦 Inventory Optimization", f"Stock more products from **Category {top_revenue_cat}** - it generates the most revenue"),
+            ("🎁 Bundle Offers", "Create product bundles based on discovered association rules to increase cross-selling"),
+            ("⭐ VIP Program", f"Launch a loyalty program for the {len(anomalies):,} identified high-value customers"),
+            ("📱 Personalization", "Use cluster insights to personalize email campaigns and promotions"),
+            ("🛒 Gender-Specific Promotions", f"Tailor product recommendations based on {top_gender} shopping preferences")
+        ]
+        
+        cols = st.columns(2)
+        for i, (title, desc) in enumerate(recs):
+            with cols[i % 2]:
+                st.markdown(f"""
+                <div class="insight-box">
+                    <h4>{title}</h4>
+                    <p>{desc}</p>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Final summary
+        st.markdown("---")
+        st.markdown("""
+        <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; color: white;">
+            <h2>🎉 Analysis Complete!</h2>
+            <p style="font-size: 1.2rem;">Your Black Friday sales data has been analyzed successfully.</p>
+            <p>Use these insights to optimize your retail strategy and boost revenue!</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 else:
-    st.info("Please upload a CSV file to begin the analysis.")
+    # No data loaded - show welcome screen
+    st.markdown("""
+    <div class="main-header">
+        <h1>🛍️ Black Friday Sales Analytics</h1>
+        <p>Uncover hidden patterns in retail data with AI-powered insights</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Show expected format
-    st.subheader("Expected Dataset Format")
-    st.write("""
-    The dataset should contain the following columns:
-    - **User_ID**: Unique identifier for each user
-    - **Product_ID**: Unique identifier for each product
-    - **Gender**: Gender of the user (M/F)
-    - **Age**: Age group of the user (0-17, 18-25, 26-35, 36-45, 46-50, 51-55, 55+)
-    - **Occupation**: Occupation code (masked)
-    - **City_Category**: Category of the city (A, B, C)
-    - **Stay_In_Current_City_Years**: Number of years stayed in current city
-    - **Marital_Status**: Marital status (0/1)
-    - **Product_Category_1, 2, 3**: Product categories
-    - **Purchase**: Purchase amount
+    st.image("generated_images/generated_image_665d699d-6249-4178-b83f-9a93dce89dca_0.png", width=180)
+    
+    st.warning("⚠️ Dataset not found! Please ensure 'black_friday_sales.csv' is in the same directory.")
+    
+    st.markdown("""
+    ### 📋 Expected Dataset Format
+    
+    Your CSV file should contain the following columns:
+    - **User_ID** - Unique customer identifier
+    - **Product_ID** - Unique product identifier  
+    - **Gender** - Customer gender (M/F)
+    - **Age** - Age group (0-17, 18-25, 26-35, 36-45, 46-50, 51-55, 55+)
+    - **Occupation** - Occupation code
+    - **City_Category** - City category (A, B, C)
+    - **Stay_In_Current_City_Years** - Years in current city
+    - **Marital_Status** - Marital status (0/1)
+    - **Product_Category_1, 2, 3** - Product categories
+    - **Purchase** - Purchase amount in dollars
     """)
