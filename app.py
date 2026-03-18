@@ -141,7 +141,7 @@ st.markdown("""
 # ═══════════════════════════════════════════════════════════════════
 @st.cache_data
 def load_data():
-    df = pd.read_csv("Blackfriday.csv")
+    df = pd.read_csv("BlackFriday.csv")
     
     # Data cleaning
     df['Product_Category_2'].fillna(0, inplace=True)
