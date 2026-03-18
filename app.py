@@ -173,7 +173,7 @@ except:
 # ═══════════════════════════════════════════════════════════════════
 with st.sidebar:
     # Mascot image
-    st.image("mascot.png", 
+    st.image("logo.png", 
              width=180, caption="Your Data Ninja! 🥷")
     
     st.markdown("---")
@@ -215,7 +215,7 @@ if data_loaded:
         </div>
         """, unsafe_allow_html=True)
     with col2:
-        st.image("mascot.png", 
+        st.image("logo.png", 
                  width=180)
     
     # Key Metrics Row
@@ -623,7 +623,7 @@ else:
     </div>
     """, unsafe_allow_html=True)
     
-    st.image("mascot.png", width=180)
+    st.image("logo.png", width=180)
     
     st.warning("⚠️ Dataset not found! Please ensure 'black_friday_sales.csv' is in the same directory.")
     
