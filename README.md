@@ -10,10 +10,9 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 ├── requirements.txt                # Python dependencies
 ├── README.md                       # Project documentation
 │
-├── generated_images/               # Mascot and generated images
-│   └── generated_image_*.png       # Data Ninja mascot
+├── logo.png      # Data Ninja mascot
 │
-└── black_friday_sales.csv          # Dataset (not included)
+└── BlackFriday.csv          # Dataset (not included)
 </code></pre><h2>🎮 Usage Guide</h2><h3>Sidebar Controls</h3><ul> <li><strong>Number of Clusters</strong>: Adjust the K value for customer segmentation (2-8)</li> <li><strong>Anomaly Sensitivity</strong>: Set the contamination rate for anomaly detection (1%-10%)</li> </ul><h3>Navigation Tabs</h3><ol> <li><strong>Overview</strong>: Explore data distributions and correlations</li> <li><strong>Customer Segments</strong>: Analyze customer clusters and their characteristics</li> <li><strong>Product Insights</strong>: Discover popular categories and product associations</li> <li><strong>Anomaly Detection</strong>: Identify unusual shopping behaviors</li> <li><strong>Recommendations</strong>: Get AI-powered business insights</li> </ol><h2>📊 Sample Insights</h2><p>The dashboard automatically generates insights such as:</p><ul> <li>Top spending age groups</li> <li>Gender-based purchasing patterns</li> <li>Most popular product categories</li> <li>High-value customer identification</li> <li>Cross-selling opportunities</li> </ul><h2>🔧 Customization</h2><h3>Adding New Visualizations</h3><p>Edit <code>app.py</code> and add new charts in the respective tab sections:</p><pre><code class="language-python">fig, ax = plt.subplots()
 # Your visualization code
 st.pyplot(fig)
